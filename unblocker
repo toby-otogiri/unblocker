@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Overdrive Unblocker</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
+        button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
+        input, textarea { margin: 10px; padding: 5px; width: 300px; }
+        textarea { vertical-align: top; }
+    </style>
+</head>
+<body>
+    <h1>Overdrive Unblocker</h1>
+    <p>Enter a URL to unblock or paste your JS code below.</p>
+    <input id="targetUrl" type="text" placeholder="https://example.com">
+    <button onclick="runUnblocker()">Unblock URL</button>
+    <br>
+    <textarea id="manualScript" rows="5" cols="50" placeholder="Paste your JavaScript here"></textarea>
+    <button onclick="runManualScript()">Run Manual Script</button>
+
+    <script>
+        const proxyList = [
+            "https://interstellar-proxy.herokuapp.com/", // Replace with working proxies
+            "https://holyunblocker.net/",
+            "https://ultraviolet-proxy.glitch.me/",
+            "https://proxyium.com/",
+            "data:text/html,<h1>Unblocker Base</h1>"
+        ];
+
+        const stealthChannel = new BroadcastChannel('overdrive-unblocker');
+        const scriptQueue = [];
+
+        async function fetchJsFromSource(sourceUrl) {
+            for (let proxy of proxyList) {
+                try {
+                    const url = proxy.startsWith("data:") ? sourceUrl : `${proxy}${sourceUrl}`;
+                    const response = await fetch(url, { mode: 'no-cors', cache: 'no-store' });
+                    const text = await response.text();
+                    const scripts = text.match(/<script[^>]*>([\s\S]*?)<\/script>/gi)?.map(s => 
+                        s.replace(/<script[^>]*>|<\/script>/gi, "").trim()
+                    ) || [];
+                    return scripts.length ? scripts : [text];
+                } catch (e) {
+                    console.warn(`Proxy ${proxy} failed:`, e);
+                    continue;
+                }
+            }
+            return [`alert("All proxies failed - check console")`];
+        }
+
+        function spreadToTabs(jsCode, maxTabs = 5) {
+            scriptQueue.push(...jsCode);
+
+            const spawnTab = (i) => {
+                setTimeout(() => {
+                    const tab = window.open("about:blank", `_blank${i}`, "noopener");
+                    if (tab) {
+                        tab.document.write(`
+                            <script>
+                                const ch = new BroadcastChannel('overdrive-unblocker');
+                                ch.onmessage = (e) => {
+                                    if (e.data.type === 'exec') {
+                                        try { (new Function(e.data.code))(); } catch(err) { console.error(err); }
+                                    }
+                                };
+                            </script>
+                        `);
+                    }
+                }, Math.random() * 500);
+            };
+
+            for (let i = 0; i < maxTabs; i++) spawnTab(i);
+
+            scriptQueue.forEach(code => 
+                stealthChannel.postMessage({ type: 'exec', code })
+            );
+        }
+
+        async function overdriveUnblocker(targetUrl) {
+            const jsCode = await fetchJsFromSource(targetUrl);
+            if (jsCode && jsCode.length) {
+                console.log("Extracted JS:", jsCode);
+                spreadToTabs(jsCode);
+            } else {
+                console.log("No JavaScript extracted.");
+            }
+        }
+
+        stealthChannel.onmessage = (e) => {
+            if (e.data.type === 'exec') {
+                try { (new Function(e.data.code))(); } catch (err) { console.error(err); }
+            }
+        };
+
+        function runUnblocker() {
+            const url = document.getElementById("targetUrl").value;
+            if (url) overdriveUnblocker(url);
+            else alert("Please enter a URL!");
+        }
+
+        function runManualScript() {
+            const script = document.getElementById("manualScript").value;
+            if (script) spreadToTabs([script]);
+            else alert("Please enter some JavaScript!");
+        }
+    </script>
+</body>
+</html>
